@@ -3,113 +3,119 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>🟢 P2Pオンライン オセロ - URLを送るだけ対戦</title>
+  <title>🎲 BOARD ARENA - オンライン対戦ボードゲームポータル</title>
   <link rel="stylesheet" href="style.css">
-  <!-- PeerJS 公式CDN -->
+  <!-- PeerJS 公式CDN (WebRTC P2P) -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
-  <div class="app-container">
+  <div id="app" class="app-container">
     
-    <!-- ヘッダー / ステータスバー -->
+    <!-- プラットフォーム共通ヘッダー -->
     <header class="app-header">
-      <h1 class="logo">🟢 OTHELLO ONLINE</h1>
-      <div id="connection-status" class="status-pill">サーバー接続待機中...</div>
+      <div class="header-left">
+        <h1 class="platform-logo" id="logo-btn">🎲 BOARD ARENA</h1>
+      </div>
+      <div class="header-right">
+        <!-- ユーザーネーム設定 -->
+        <div class="user-profile">
+          <span class="user-icon">👤</span>
+          <input type="text" id="username-input" class="username-input" value="プレイヤー" maxlength="10" title="クリックして名前を変更">
+        </div>
+        <div id="network-status" class="status-pill">接続中...</div>
+      </div>
     </header>
 
-    <!-- ロビー画面（オーバーレイ） -->
-    <div id="lobby-modal" class="modal-overlay">
-      <div class="modal-card">
-        <h2 class="modal-title">オンライン対戦ロビー</h2>
-        <p class="modal-desc">URLを送るだけで誰とでもすぐにオセロ対戦！</p>
-
-        <!-- 部屋を作る -->
-        <div class="lobby-action-box">
-          <button id="create-room-btn" class="btn btn-primary btn-lg">🏠 部屋を作る (先手・黒)</button>
-          
-          <div id="room-info" class="room-info hidden">
-            <div class="code-badge">合言葉: <span id="display-room-code">----</span></div>
-            <p class="sub-text">下のボタンを押して友達にURLを送るだけで対戦開始！</p>
-            <button id="copy-url-btn" class="btn btn-success">📋 招待URLをコピー</button>
-            <div id="copy-toast" class="toast hidden">コピーしました！友達に送信してください</div>
-          </div>
-        </div>
-
-        <div class="divider"><span>または</span></div>
-
-        <!-- 部屋に参加する -->
-        <div class="lobby-action-box">
-          <div class="input-row">
-            <input type="text" id="join-code-input" placeholder="4桁コード (例: A8X2)" maxlength="6">
-            <button id="join-room-btn" class="btn btn-secondary">🚪 参加 (後手・白)</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ゲーム対戦画面 -->
-    <main id="game-view" class="game-view">
-      
-      <!-- プレイヤー情報＆スコアバー -->
-      <section class="players-bar">
-        <!-- プレイヤー1 (黒) -->
-        <div id="player-black-card" class="player-card active-turn">
-          <div class="disc disc-black"></div>
-          <div class="player-details">
-            <div class="player-role" id="p1-role-text">先手 (黒)</div>
-            <div class="disc-count" id="black-count">2</div>
-          </div>
-        </div>
-
-        <!-- ターン表示バッジ -->
-        <div class="turn-indicator" id="turn-indicator">
-          <span id="turn-text">黒の手番です</span>
-        </div>
-
-        <!-- プレイヤー2 (白) -->
-        <div id="player-white-card" class="player-card">
-          <div class="disc disc-white"></div>
-          <div class="player-details">
-            <div class="player-role" id="p2-role-text">後手 (白)</div>
-            <div class="disc-count" id="white-count">2</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- オセロ盤 (8×8) -->
-      <div class="board-wrapper">
-        <div id="board" class="board"></div>
+    <!-- 1. ゲーム選択ポータル (カタログ画面) -->
+    <section id="catalog-view" class="view-panel active">
+      <div class="catalog-hero">
+        <h2 class="hero-title">オンライン・ボードゲームアリーナ</h2>
+        <p class="hero-subtitle">インストール不要・URLを送るだけで誰とでもリアルタイムP2P対戦！</p>
       </div>
 
-      <!-- 下部コントロール（エモート＆降参） -->
-      <footer class="game-footer">
-        <div class="emote-bar">
+      <div class="catalog-grid" id="games-grid">
+        <!-- ゲームコンポーネントカードが自動的にここに追加されます -->
+      </div>
+    </section>
+
+    <!-- 2. ゲームプレイ画面 (ステージ) -->
+    <section id="game-view" class="view-panel">
+      <!-- ゲーム上部バー -->
+      <div class="game-header-bar">
+        <button id="back-to-catalog-btn" class="btn-subtle">◀ ゲーム一覧に戻る</button>
+        <div class="active-game-title" id="active-game-title">ゲーム名</div>
+        <button id="share-room-btn" class="btn btn-sm btn-primary">📋 招待リンク</button>
+      </div>
+
+      <!-- 対戦プレイヤー情報バー -->
+      <div class="players-info-bar">
+        <div class="player-box p1-box" id="p1-box">
+          <span class="p-role">先手 (P1)</span>
+          <span class="p-name" id="p1-name-display">ホスト</span>
+        </div>
+        <div class="vs-badge" id="match-status-badge">対戦中</div>
+        <div class="player-box p2-box" id="p2-box">
+          <span class="p-role">後手 (P2)</span>
+          <span class="p-name" id="p2-name-display">ゲスト待機中...</span>
+        </div>
+      </div>
+
+      <!-- 各ゲームコンポーネントがマウントされる動的領域 -->
+      <div id="game-mount-point" class="game-mount-point"></div>
+
+      <!-- 共通エモート＆リアクションバー -->
+      <div class="shared-footer-bar">
+        <div class="emote-buttons">
           <button class="emote-btn" data-msg="よろしくお願いします！">👋 よろしく</button>
           <button class="emote-btn" data-msg="考え中…🤔">🤔 長考中</button>
           <button class="emote-btn" data-msg="ナイス！👏">👏 ナイス</button>
-          <button class="emote-btn" data-msg="うまい！😱">😱 やられた</button>
+          <button class="emote-btn" data-msg="参りました！🏳️">🏳️ 降参</button>
         </div>
-        <div id="chat-bubble" class="chat-bubble hidden"></div>
-      </footer>
+        <div id="chat-toast" class="chat-toast hidden"></div>
+      </div>
+    </section>
 
-    </main>
-
-    <!-- 結果モーダル -->
-    <div id="result-modal" class="modal-overlay hidden">
+    <!-- 共通ロビーモーダル (部屋作成 / 参加) -->
+    <div id="lobby-modal" class="modal-backdrop hidden">
       <div class="modal-card">
-        <h2 id="result-title" class="result-title">ゲーム終了！</h2>
-        <div class="result-scores">
-          <div class="res-box black">黒: <span id="res-black-count">0</span></div>
-          <div class="res-vs">vs</div>
-          <div class="res-box white">白: <span id="res-white-count">0</span></div>
+        <h2 class="modal-title" id="lobby-game-title">オセロで対戦</h2>
+        <p class="modal-desc">部屋を作って友達にURLを送るか、合言葉で合流します。</p>
+
+        <!-- 部屋を作る -->
+        <div class="lobby-action-section">
+          <button id="create-room-btn" class="btn btn-primary btn-block btn-lg">🏠 部屋を作る (Host)</button>
+          
+          <div id="room-created-info" class="room-info-card hidden">
+            <div class="room-code-tag">合言葉: <span id="display-room-code">----</span></div>
+            <p class="guide-text">下のボタンを押して友達にURLを送るだけで自動対戦が始まります！</p>
+            <button id="copy-invite-url-btn" class="btn btn-success btn-block">📋 招待URLをコピー</button>
+            <div id="copy-toast" class="toast-msg hidden">URLをコピーしました！友達に送信してください</div>
+          </div>
         </div>
-        <p id="result-message" class="result-message"></p>
-        <button id="rematch-btn" class="btn btn-primary btn-lg">🔄 もう一度遊ぶ</button>
+
+        <div class="modal-divider"><span>または</span></div>
+
+        <!-- 部屋に参加する -->
+        <div class="lobby-action-section">
+          <div class="join-input-group">
+            <input type="text" id="join-code-input" placeholder="4桁コード (例: A8X2)" maxlength="6">
+            <button id="join-room-btn" class="btn btn-secondary">🚪 参加する</button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="close-lobby-btn" class="btn-subtle">キャンセル</button>
+        </div>
       </div>
     </div>
 
   </div>
 
-  <script src="othello.js"></script>
+  <!-- プラットフォーム コアエンジン -->
+  <script src="arena-core.js"></script>
+
+  <!-- 各ゲームコンポーネントの読み込み (ここに追加するだけでカタログに自動登録) -->
+  <script src="games/othello.js"></script>
+  <script src="games/gomoku.js"></script>
 </body>
 </html>
