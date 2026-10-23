@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>🟢 P2Pオンライン オセロ - URLを送るだけ対戦</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- PeerJS 公式CDN -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- ヘッダー / ステータスバー -->
+    <header class="app-header">
+      <h1 class="logo">🟢 OTHELLO ONLINE</h1>
+      <div id="connection-status" class="status-pill">サーバー接続待機中...</div>
+    </header>
+
+    <!-- ロビー画面（オーバーレイ） -->
+    <div id="lobby-modal" class="modal-overlay">
+      <div class="modal-card">
+        <h2 class="modal-title">オンライン対戦ロビー</h2>
+        <p class="modal-desc">URLを送るだけで誰とでもすぐにオセロ対戦！</p>
+
+        <!-- 部屋を作る -->
+        <div class="lobby-action-box">
+          <button id="create-room-btn" class="btn btn-primary btn-lg">🏠 部屋を作る (先手・黒)</button>
+          
+          <div id="room-info" class="room-info hidden">
+            <div class="code-badge">合言葉: <span id="display-room-code">----</span></div>
+            <p class="sub-text">下のボタンを押して友達にURLを送るだけで対戦開始！</p>
+            <button id="copy-url-btn" class="btn btn-success">📋 招待URLをコピー</button>
+            <div id="copy-toast" class="toast hidden">コピーしました！友達に送信してください</div>
+          </div>
+        </div>
+
+        <div class="divider"><span>または</span></div>
+
+        <!-- 部屋に参加する -->
+        <div class="lobby-action-box">
+          <div class="input-row">
+            <input type="text" id="join-code-input" placeholder="4桁コード (例: A8X2)" maxlength="6">
+            <button id="join-room-btn" class="btn btn-secondary">🚪 参加 (後手・白)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ゲーム対戦画面 -->
+    <main id="game-view" class="game-view">
+      
+      <!-- プレイヤー情報＆スコアバー -->
+      <section class="players-bar">
+        <!-- プレイヤー1 (黒) -->
+        <div id="player-black-card" class="player-card active-turn">
+          <div class="disc disc-black"></div>
+          <div class="player-details">
+            <div class="player-role" id="p1-role-text">先手 (黒)</div>
+            <div class="disc-count" id="black-count">2</div>
+          </div>
+        </div>
+
+        <!-- ターン表示バッジ -->
+        <div class="turn-indicator" id="turn-indicator">
+          <span id="turn-text">黒の手番です</span>
+        </div>
+
+        <!-- プレイヤー2 (白) -->
+        <div id="player-white-card" class="player-card">
+          <div class="disc disc-white"></div>
+          <div class="player-details">
+            <div class="player-role" id="p2-role-text">後手 (白)</div>
+            <div class="disc-count" id="white-count">2</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- オセロ盤 (8×8) -->
+      <div class="board-wrapper">
+        <div id="board" class="board"></div>
+      </div>
+
+      <!-- 下部コントロール（エモート＆降参） -->
+      <footer class="game-footer">
+        <div class="emote-bar">
+          <button class="emote-btn" data-msg="よろしくお願いします！">👋 よろしく</button>
+          <button class="emote-btn" data-msg="考え中…🤔">🤔 長考中</button>
+          <button class="emote-btn" data-msg="ナイス！👏">👏 ナイス</button>
+          <button class="emote-btn" data-msg="うまい！😱">😱 やられた</button>
+        </div>
+        <div id="chat-bubble" class="chat-bubble hidden"></div>
+      </footer>
+
+    </main>
+
+    <!-- 結果モーダル -->
+    <div id="result-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h2 id="result-title" class="result-title">ゲーム終了！</h2>
+        <div class="result-scores">
+          <div class="res-box black">黒: <span id="res-black-count">0</span></div>
+          <div class="res-vs">vs</div>
+          <div class="res-box white">白: <span id="res-white-count">0</span></div>
+        </div>
+        <p id="result-message" class="result-message"></p>
+        <button id="rematch-btn" class="btn btn-primary btn-lg">🔄 もう一度遊ぶ</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="othello.js"></script>
+</body>
+</html>
