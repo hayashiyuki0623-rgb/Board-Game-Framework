@@ -332,10 +332,15 @@
 
       // 描画
       function render() {
-        const isMyTurn = currentTurn === myPlayer && !isGameOver;
+        const isConnected = bridge.isConnected();
+        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
+        const activePlayer = isConnected ? myPlayer : currentTurn;
 
         // ターンバッジ
-        if (currentTurn === P1) {
+        if (!isConnected) {
+          turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? '紫' : '橙'})`;
+          turnBadge.style.color = currentTurn === P1 ? '#c084fc' : '#fb923c';
+        } else if (currentTurn === P1) {
           turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (紫)' : '相手の考え中… (紫)';
           turnBadge.style.color = '#c084fc';
         } else {
@@ -351,11 +356,11 @@
         }
 
         // 手持ちトレイ描画
-        renderTray(myPlayer);
+        renderTray(activePlayer);
 
         // 14×14 盤面描画
         gridEl.innerHTML = '';
-        const previewPositions = getPreviewCells();
+        const previewPositions = getPreviewCells(activePlayer);
 
         for (let r = 0; r < BOARD_SIZE; r++) {
           for (let c = 0; c < BOARD_SIZE; c++) {
@@ -383,8 +388,8 @@
               });
 
               cell.addEventListener('click', () => {
-                if (canPlacePiece(r, c, currentShape, myPlayer)) {
-                  placePiece(r, c, currentShape, selectedPieceId, myPlayer, true);
+                if (canPlacePiece(r, c, currentShape, activePlayer)) {
+                  placePiece(r, c, currentShape, selectedPieceId, activePlayer, isConnected);
                 }
               });
             }
@@ -398,12 +403,12 @@
         return shape.flat().filter(v => v === 1).length;
       }
 
-      function getPreviewCells() {
+      function getPreviewCells(player = myPlayer) {
         const set = new Set();
         if (!hoverCell || !currentShape) return { cells: set, valid: false };
 
         const { r, c } = hoverCell;
-        const valid = canPlacePiece(r, c, currentShape, myPlayer);
+        const valid = canPlacePiece(r, c, currentShape, player);
         const rows = currentShape.length;
         const cols = currentShape[0].length;
 
@@ -449,7 +454,8 @@
 
           if (isRemaining) {
             card.addEventListener('click', () => {
-              if (currentTurn !== myPlayer || isGameOver) return;
+              const isConnected = bridge.isConnected();
+              if ((isConnected && currentTurn !== myPlayer) || isGameOver) return;
               if (selectedPieceId === p.id) {
                 selectedPieceId = null;
                 currentShape = null;
@@ -501,10 +507,14 @@
 
       // パスボタン
       passBtn.addEventListener('click', () => {
-        if (currentTurn !== myPlayer || isGameOver) return;
+        const isConnected = bridge.isConnected();
+        if ((isConnected && currentTurn !== myPlayer) || isGameOver) return;
         if (confirm('パスしますか？（置ける場所がない場合のみ推奨）')) {
+          const passingPlayer = isConnected ? myPlayer : currentTurn;
           currentTurn = currentTurn === P1 ? P2 : P1;
-          bridge.send({ game: 'blokus', type: 'pass', player: myPlayer });
+          if (isConnected) {
+            bridge.send({ game: 'blokus', type: 'pass', player: passingPlayer });
+          }
           bridge.showToast('パスしました');
           render();
         }
@@ -530,6 +540,11 @@
         initGame();
         bridge.send({ game: 'blokus', type: 'restart' });
         bridge.showToast('再戦を開始しました！');
+      });
+
+      bridge.onPlayerJoined(() => {
+        initGame();
+        bridge.showToast('対戦相手が合流しました！ブロックス開始！');
       });
 
       // 初期化

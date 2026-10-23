@@ -177,8 +177,11 @@
 
       function render() {
         gridEl.innerHTML = '';
-        const isMyTurn = currentTurn === myColor && !isGameOver;
-        const validMoves = isMyTurn ? getValidMoves(myColor) : [];
+        const isConnected = bridge.isConnected();
+        // 接続前は一人で両方の手を試せる（練習・待機モード）
+        const isMyTurn = (!isConnected || currentTurn === myColor) && !isGameOver;
+        const validColor = isConnected ? myColor : currentTurn;
+        const validMoves = isMyTurn ? getValidMoves(validColor) : [];
         const validSet = new Set(validMoves.map(m => `${m.r},${m.c}`));
 
         let b = 0, w = 0;
@@ -197,8 +200,8 @@
             } else if (validSet.has(`${r},${c}`)) {
               cell.classList.add('valid');
               cell.addEventListener('click', () => {
-                if (currentTurn === myColor && !isGameOver) {
-                  makeMove(r, c, myColor, true);
+                if (isMyTurn && !isGameOver) {
+                  makeMove(r, c, validColor, isConnected);
                 }
               });
             }
@@ -209,12 +212,20 @@
         bCountEl.textContent = b;
         wCountEl.textContent = w;
 
-        if (currentTurn === BLACK) {
+        if (!isConnected) {
+          turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === BLACK ? '黒' : '白'}の手番)`;
+        } else if (currentTurn === BLACK) {
           turnBadge.textContent = myColor === BLACK ? '🟢 あなたの手番 (黒)' : '相手が考え中… (黒)';
         } else {
           turnBadge.textContent = myColor === WHITE ? '🟢 あなたの手番 (白)' : '相手が考え中… (白)';
         }
       }
+
+      // 相手が入室した時の本番開始イベント
+      bridge.onPlayerJoined(() => {
+        initGame();
+        bridge.showToast('対戦相手が合流しました！オセロ対戦開始！');
+      });
 
       // P2Pパケット受信処理
       bridge.onReceive((data) => {

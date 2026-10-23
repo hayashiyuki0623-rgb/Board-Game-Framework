@@ -121,6 +121,10 @@
 
       function render() {
         gridEl.innerHTML = '';
+        const isConnected = bridge.isConnected();
+        const isMyTurn = (!isConnected || currentTurn === myColor) && !isGameOver;
+        const placeColor = isConnected ? myColor : currentTurn;
+
         for (let r = 0; r < BOARD_SIZE; r++) {
           for (let c = 0; c < BOARD_SIZE; c++) {
             const cell = document.createElement('div');
@@ -133,8 +137,8 @@
               cell.innerHTML = '<div class="gom-piece w"></div>';
             } else {
               cell.addEventListener('click', () => {
-                if (currentTurn === myColor && !isGameOver) {
-                  makeMove(r, c, myColor, true);
+                if (isMyTurn && !isGameOver) {
+                  makeMove(r, c, placeColor, isConnected);
                 }
               });
             }
@@ -143,13 +147,20 @@
         }
 
         if (!isGameOver) {
-          if (currentTurn === BLACK) {
+          if (!isConnected) {
+            turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === BLACK ? '黒' : '白'}の手番)`;
+          } else if (currentTurn === BLACK) {
             turnBadge.textContent = myColor === BLACK ? '🟢 あなたの手番 (黒)' : '相手が考え中… (黒)';
           } else {
             turnBadge.textContent = myColor === WHITE ? '🟢 あなたの手番 (白)' : '相手が考え中… (白)';
           }
         }
       }
+
+      bridge.onPlayerJoined(() => {
+        initGame();
+        bridge.showToast('対戦相手が合流しました！五目並べ開始！');
+      });
 
       bridge.onReceive((data) => {
         if (data.game !== 'gomoku') return;

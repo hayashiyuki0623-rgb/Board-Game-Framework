@@ -214,11 +214,16 @@
 
       // 描画処理
       function render() {
-        const isMyTurn = currentTurn === myPlayer && !isGameOver;
+        const isConnected = bridge.isConnected();
+        const isMyTurn = (!isConnected || currentTurn === myPlayer) && !isGameOver;
+        const activePlayer = isConnected ? myPlayer : currentTurn;
 
         // ステータス更新
         if (!isGameOver) {
-          if (currentTurn === P1) {
+          if (!isConnected) {
+            turnBadge.textContent = `⏳ 待機中 (一人練習中: ${currentTurn === P1 ? 'オレンジ' : 'ブルー'})`;
+            turnBadge.style.color = currentTurn === P1 ? '#f97316' : '#38bdf8';
+          } else if (currentTurn === P1) {
             turnBadge.textContent = myPlayer === P1 ? '🟢 あなたの手番 (オレンジ)' : '相手の考え中… (オレンジ)';
             turnBadge.style.color = '#f97316';
           } else {
@@ -234,8 +239,8 @@
         }
 
         // 手持ちエリアの描画
-        renderHand(P1, p1PiecesEl, isMyTurn && currentTurn === P1);
-        renderHand(P2, p2PiecesEl, isMyTurn && currentTurn === P2);
+        renderHand(P1, p1PiecesEl, isMyTurn && currentTurn === P1, activePlayer);
+        renderHand(P2, p2PiecesEl, isMyTurn && currentTurn === P2, activePlayer);
 
         // 3×3 盤面の描画
         gridEl.innerHTML = '';
@@ -252,13 +257,13 @@
               cell.appendChild(pieceEl);
 
               // 盤面上の自分のコマをクリックして移動元として選択
-              if (isMyTurn && top.player === myPlayer) {
+              if (isMyTurn && (top.player === activePlayer)) {
                 cell.addEventListener('click', (e) => {
                   e.stopPropagation();
                   if (selectedPiece && selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c) {
-                    selectedPiece = null; // 選択解除
+                    selectedPiece = null;
                   } else {
-                    selectedPiece = { type: 'board', r: r, c: c, size: top.size };
+                    selectedPiece = { type: 'board', r: r, c: c, size: top.size, player: top.player };
                   }
                   render();
                 });
@@ -267,7 +272,6 @@
 
             // 選択中のコマがある場合、配置可能か判定
             if (isMyTurn && selectedPiece) {
-              // 移動元自身への移動は除外
               const isSource = selectedPiece.type === 'board' && selectedPiece.r === r && selectedPiece.c === c;
               if (isSource) {
                 cell.classList.add('selected-source');
@@ -277,8 +281,8 @@
                   executeMove({
                     from: selectedPiece,
                     to: { r: r, c: c },
-                    player: myPlayer
-                  }, true);
+                    player: selectedPiece.player || activePlayer
+                  }, isConnected);
                 });
               }
             }
@@ -288,7 +292,12 @@
         }
       }
 
-      function renderHand(player, containerEl, isSelectable) {
+      bridge.onPlayerJoined(() => {
+        initGame();
+        bridge.showToast('対戦相手が合流しました！ゴブレット開始！');
+      });
+
+      function renderHand(player, containerEl, isSelectable, activePlayer = myPlayer) {
         containerEl.innerHTML = '';
         const hand = hands[player];
 
@@ -297,7 +306,7 @@
           if (count > 0) {
             const slot = document.createElement('div');
             slot.className = 'hand-slot';
-            if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.size === size && player === myPlayer) {
+            if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.size === size && player === (selectedPiece.player || activePlayer)) {
               slot.classList.add('selected');
             }
 
@@ -311,10 +320,10 @@
 
             if (isSelectable) {
               slot.addEventListener('click', () => {
-                if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.size === size) {
+                if (selectedPiece && selectedPiece.type === 'hand' && selectedPiece.size === size && selectedPiece.player === player) {
                   selectedPiece = null; // 解除
                 } else {
-                  selectedPiece = { type: 'hand', size: size };
+                  selectedPiece = { type: 'hand', size: size, player: player };
                 }
                 render();
               });

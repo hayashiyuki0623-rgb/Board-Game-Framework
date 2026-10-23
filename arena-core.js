@@ -122,40 +122,51 @@
   el.usernameInput.addEventListener('change', (e) => {
     state.localName = e.target.value.trim() || 'プレイヤー';
     localStorage.setItem('ba_username', state.localName);
+    updatePlayersBar();
     if (state.isConnected) {
       sendPlatformPacket({ type: 'name_sync', name: state.localName });
     }
   });
 
-  // 部屋を作る
+  // ★ 部屋を作る（一人でも即座にゲーム盤面に入って待てる！）
   el.createRoomBtn.addEventListener('click', () => {
     state.isHost = true;
     state.myPlayerIndex = 1;
+    state.isConnected = false;
+    state.remoteName = '友達待機中…';
     state.roomCode = generateRoomCode();
     const fullPeerId = `${PEER_PREFIX}${selectedGameId}-${state.roomCode}`;
 
     if (state.peer) state.peer.destroy();
     initPeer(fullPeerId);
 
-    el.displayRoomCode.textContent = state.roomCode;
-    el.roomCreatedInfo.classList.remove('hidden');
-    el.createRoomBtn.disabled = true;
+    // モーダルを閉じ、即座にゲーム画面に入場！
+    el.lobbyModal.classList.add('hidden');
+    launchGame(selectedGameId);
+
+    // URLを自動クリップボードコピー
+    const inviteUrl = getInviteUrl(selectedGameId, state.roomCode);
+    navigator.clipboard.writeText(inviteUrl).catch(() => {});
+
+    showToast(`部屋を作成しました (合言葉: ${state.roomCode})！招待URLをコピーしました`);
   });
 
   // 招待URLコピー
-  el.copyInviteUrlBtn.addEventListener('click', () => {
-    copyInviteUrl();
-  });
-  el.shareRoomBtn.addEventListener('click', () => {
-    copyInviteUrl();
-  });
+  el.copyInviteUrlBtn.addEventListener('click', () => copyInviteUrl());
+  el.shareRoomBtn.addEventListener('click', () => copyInviteUrl());
+
+  function getInviteUrl(gameId, code) {
+    return `${window.location.origin}${window.location.pathname}?game=${gameId}&room=${code}`;
+  }
 
   function copyInviteUrl() {
-    const url = `${window.location.origin}${window.location.pathname}?game=${selectedGameId}&room=${state.roomCode}`;
+    if (!state.roomCode) {
+      showToast('部屋が作成されていません');
+      return;
+    }
+    const url = getInviteUrl(selectedGameId, state.roomCode);
     navigator.clipboard.writeText(url).then(() => {
-      el.copyToast.classList.remove('hidden');
-      showToast('招待URLをコピーしました！友達に送信してください');
-      setTimeout(() => el.copyToast.classList.add('hidden'), 2500);
+      showToast('📋 招待URLをコピーしました！友達に送信してください');
     });
   }
 
@@ -173,10 +184,13 @@
     selectedGameId = gameId;
     state.isHost = false;
     state.myPlayerIndex = 2;
+    state.isConnected = false;
     state.roomCode = code;
+    state.remoteName = 'ホストに接続中…';
     const targetPeerId = `${PEER_PREFIX}${gameId}-${code}`;
 
     el.lobbyModal.classList.add('hidden');
+    launchGame(selectedGameId);
     showToast(`ホスト (${code}) に接続中...`);
 
     if (state.peer) {
@@ -216,6 +230,9 @@
     });
   }
 
+  const registeredGameDataListeners = new Set();
+  const registeredPlayerJoinedListeners = new Set();
+
   function setupConnectionEvents() {
     state.conn.on('open', () => {
       state.isConnected = true;
@@ -224,8 +241,11 @@
       // プレイヤー名交換
       sendPlatformPacket({ type: 'name_sync', name: state.localName });
 
-      // ゲームステージのマウント
-      launchGame(selectedGameId);
+      updatePlayersBar();
+      showToast('🎉 対戦相手が合流しました！ゲーム開始！');
+
+      // ゲームコンポーネントに合流を通知
+      registeredPlayerJoinedListeners.forEach(listener => listener());
     });
 
     state.conn.on('data', (data) => {
@@ -245,11 +265,8 @@
     }
   }
 
-  const registeredGameDataListeners = new Set();
-
   function handleIncomingPacket(data) {
     if (data._platform) {
-      // プラットフォーム共通パケット処理
       if (data.type === 'name_sync') {
         state.remoteName = data.name;
         updatePlayersBar();
@@ -257,7 +274,6 @@
         showToast(`${state.remoteName}: ${data.msg}`);
       }
     } else {
-      // 各ゲームモジュールへパケットを伝達
       registeredGameDataListeners.forEach((listener) => listener(data));
     }
   }
@@ -269,17 +285,16 @@
     const game = state.games.get(gameId);
     if (!game) return;
 
-    // 前のゲームがあれば破棄
     if (state.activeGame && state.activeGame.unmount) {
       state.activeGame.unmount();
     }
     el.mountPoint.innerHTML = '';
     registeredGameDataListeners.clear();
+    registeredPlayerJoinedListeners.clear();
 
     state.activeGame = game;
     el.activeGameTitle.textContent = `${game.icon || ''} ${game.name}`;
 
-    // ビュー切り替え
     el.catalogView.classList.remove('active');
     el.gameView.classList.add('active');
 
@@ -289,6 +304,8 @@
     const p2pBridge = {
       isHost: state.isHost,
       myPlayerIndex: state.myPlayerIndex,
+      isConnected: () => state.isConnected,
+      getRoomCode: () => state.roomCode,
       getLocalName: () => state.localName,
       getRemoteName: () => state.remoteName,
       send(data) {
@@ -299,32 +316,36 @@
       onReceive(callback) {
         registeredGameDataListeners.add(callback);
       },
+      onPlayerJoined(callback) {
+        registeredPlayerJoinedListeners.add(callback);
+      },
       showToast(msg) {
         showToast(msg);
       }
     };
 
-    // ゲームコンポーネントをマウント！
     if (game.mount) {
       game.mount(el.mountPoint, p2pBridge);
     }
-
-    showToast(`対戦開始！ ${game.name}`);
   }
 
   function updatePlayersBar() {
     if (state.isHost) {
       el.p1NameDisplay.textContent = `${state.localName} (あなた)`;
-      el.p2NameDisplay.textContent = state.isConnected ? state.remoteName : 'ゲスト待機中...';
+      el.p2NameDisplay.textContent = state.isConnected ? state.remoteName : `⏳ 待機中 (合言葉: ${state.roomCode})`;
+      el.matchStatusBadge.textContent = state.isConnected ? '🟢 対戦中' : '⏳ 友達待機中';
+      el.matchStatusBadge.style.color = state.isConnected ? '#4ade80' : '#f59e0b';
     } else {
       el.p1NameDisplay.textContent = state.remoteName;
       el.p2NameDisplay.textContent = `${state.localName} (あなた)`;
+      el.matchStatusBadge.textContent = state.isConnected ? '🟢 対戦中' : '⏳ 接続中…';
+      el.matchStatusBadge.style.color = state.isConnected ? '#4ade80' : '#38bdf8';
     }
   }
 
   // ゲーム一覧に戻る
   el.backBtn.addEventListener('click', () => {
-    if (confirm('ゲーム一覧に戻りますか？現在の対戦は終了します。')) {
+    if (confirm('ゲーム一覧に戻りますか？現在の部屋は閉じられます。')) {
       if (state.conn) state.conn.close();
       exitToCatalog();
     }
@@ -342,6 +363,7 @@
     }
     state.activeGame = null;
     state.isConnected = false;
+    state.roomCode = '';
     el.mountPoint.innerHTML = '';
 
     el.gameView.classList.remove('active');
